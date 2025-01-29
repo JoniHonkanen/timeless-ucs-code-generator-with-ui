@@ -115,6 +115,7 @@ class DockerFile(BaseModel):
         description="The name of the Docker container created from the Docker image, which is used to identify the running container instance."
     )
 
+
 class ErrorMessage(BaseModel):
     """
     Represents a structured error message.
@@ -140,16 +141,6 @@ class DockerFiles(BaseModel):
 
 # State of the graph (agents)
 class GraphState(TypedDict):
-    """
-    Represents the state of our graph.
-
-    Attributes:
-        error : Binary flag for control flow to indicate whether test error was tripped
-        messages : With user question, error messages, reasoning
-        code : Code solution
-        iterations : Number of tries
-    """
-
     error: ErrorMessage  # error messages
     messages: List  # all messages
     codes: Codes  # A collection of code files

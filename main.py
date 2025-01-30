@@ -1,3 +1,4 @@
+# RUN PROGRAM -> flask --app main run --no-reload
 import os
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -15,10 +16,10 @@ from agents import (
     debug_code_agent,
     read_me_agent,
     dockerizer_agent,
-    execute_docker_agent,
     debug_code_execution_agent,
     debug_docker_execution_agent,
-    log_docker_container_errors,
+    start_docker_container_agent,
+    start_gradio_frontend_agent,
 )
 from schemas import GraphState
 
@@ -38,51 +39,12 @@ if not os.path.exists(search_path):
 workflow = StateGraph(GraphState)
 
 
-""" async def create_code_f(state: GraphState):
-    print("ENTERING CREATE CODE FUNCTION")
-    return await code_generator_agent(state, llm) """
-
-
-# def write_code_to_file_f(state: GraphState):
-#    return write_code_to_file_agent(state, file_path)
-
-
-""" async def execute_code_f(state: GraphState):
-    return await execute_code_agent(state, file_path) """
-
-
-""" async def execute_docker_f(state: GraphState):
-    return await execute_docker_agent(state, file_path) """
-
-
-""" async def debug_code_f(state: GraphState):
-    return await debug_code_agent(state, llm) """
-
-
-""" async def debug_docker_f(state: GraphState):
-    return await debug_docker_execution_agent(state, llm, file_path) """
-
-
-""" async def debug_code_docker_f(state: GraphState):
-    return await debug_code_execution_agent(state, llm, file_path) """
-
-
-""" async def log_docker_errors_f(state: GraphState):
-    return await log_docker_container_errors(state) """
-
-
-""" async def read_me_f(state: GraphState):
-    return await read_me_agent(state, llm, file_path) """
-
-
-""" async def dockerize_f(state: GraphState):
-    return await dockerizer_agent(state, llm, file_path) """
-
-
 def decide_to_end(state: GraphState):
-    print("\nENTERING DECIDE TO END FUNCTION")
-    print(f"iterations: {state['iterations']}")
-    print(f"error: {state['error']}")
+    # Debugging function to decide which debugging approach to take
+    # If no error -> Proceed to generate README files
+    # If error in code -> debug_code
+    # If error in Docker configuration -> debug_docker
+    # If error something else -> debugger
 
     error_message = state["error"]
 
@@ -92,7 +54,6 @@ def decide_to_end(state: GraphState):
             return "end"
 
         error_type = error_message.type
-        print("Deciding which debugging approach to take")
 
         if error_type == "Docker Configuration Error":
             return "debug_docker"
@@ -104,44 +65,36 @@ def decide_to_end(state: GraphState):
         return "readme"
 
 
-workflow.add_node("programmer", code_generator_agent)
-workflow.add_node("saver", write_code_to_file_agent)
-workflow.add_node("dockerizer", dockerizer_agent)
-workflow.add_node("executer_docker", execute_docker_agent)
-workflow.add_node("debugger", debug_code_agent)
-workflow.add_node("debug_docker", debug_docker_execution_agent)
-workflow.add_node("debug_code", debug_code_execution_agent)
-workflow.add_node("log_docker_errors", log_docker_container_errors)
-workflow.add_node("readme", read_me_agent)
+workflow.add_node("programmer", code_generator_agent)  # Create code files
+workflow.add_node("saver", write_code_to_file_agent)  # Save code files
+workflow.add_node("dockerizer", dockerizer_agent)  # Create Docker files (DockerF
+workflow.add_node("executer_docker", start_docker_container_agent)  # Run code
+workflow.add_node("debug_docker", debug_docker_execution_agent)  # Debug docker
+workflow.add_node("debug_code", debug_code_execution_agent)  # Debug code
+workflow.add_node("debugger", debug_code_agent)  # Debug something else
+workflow.add_node("readme", read_me_agent)  # Create README # DEVELOPER files
+workflow.add_node(
+    "gradio_ui", start_gradio_frontend_agent
+)  # create gradio UI for sharing the files
 
 workflow.add_edge("programmer", "saver")
 workflow.add_edge("saver", "dockerizer")
-workflow.add_edge("dockerizer", "executer_docker")
+workflow.add_edge("dockerizer", "executer_docker")  # executer_docker -> conditional
 workflow.add_edge("debugger", "saver")
 workflow.add_edge("debug_docker", "executer_docker")
-workflow.add_edge("debug_code", "log_docker_errors")
-workflow.add_edge("readme", END)
+workflow.add_edge("debug_code", "executer_docker")
+workflow.add_edge("readme", "gradio_ui")
+workflow.add_edge("gradio_ui", END)
 
 workflow.add_conditional_edges(
     source="executer_docker",
     path=decide_to_end,
     path_map={
         "readme": "readme",
-        "debugger": "debugger",
-        "debug_docker": "debug_docker",
-        "debug_code": "debug_code",
-        "end": END,
-    },
-)
-workflow.add_conditional_edges(
-    source="log_docker_errors",
-    path=decide_to_end,
-    path_map={
-        "readme": "readme",
-        "debugger": "debugger",
-        "debug_docker": "debug_docker",
-        "debug_code": "debug_code",
-        "end": END,
+        "debug_docker": "debug_docker",  # try to fix docker files
+        "debug_code": "debug_code",  # try to fix file where error orccurs
+        "debugger": "debugger",  # make all files again (this is final option if error)
+        "end": END,  # end the process (if iterations full)
     },
 )
 
@@ -157,11 +110,10 @@ async def main():
     user_input = request.json.get("prompt", "")
     print(f"User input: {user_input}")
     config = RunnableConfig(recursion_limit=20)
-    print("NYT LÄHTEE!")
 
     try:
         # app.invoke muuttuu app.ainvoke, koska se on asynkroninen
-        results = await app.ainvoke(
+        res = await app.ainvoke(
             {
                 "messages": [HumanMessage(content=user_input)],
                 "iterations": 0,
@@ -172,7 +124,7 @@ async def main():
         print(f"GraphRecursionError: {e}")
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"message": "done!", "results": results})
+    return jsonify({"message": "done!", "frontend_url": res.get("frontend_url", None)})
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from schemas import GraphState, Documentation, Code
 from prompts.prompts import README_DEVELOPER_WRITER_AGENT_PROMPT
 from typing import List
 
+
 async def read_me_agent(state: GraphState):
     print("\n **GENERATING README & DEVELOPER FILES **")
     structured_llm = llm.with_structured_output(Documentation)
@@ -16,14 +17,20 @@ async def read_me_agent(state: GraphState):
     readme = docs.readme
     developer = docs.developer
 
-    readme_path = os.path.join("generated/src", "README.md")
-    developer_path = os.path.join("generated/src", "DEVELOPER.md")
+    # Define directory and ensure it exists
+    base_dir = os.path.abspath("generated/src")  
+    os.makedirs(base_dir, exist_ok=True)
+
+    readme_path = os.path.join(base_dir, "README.md")
+    developer_path = os.path.join(base_dir, "DEVELOPER.md")
+
     with open(readme_path, "w", encoding="utf-8") as f:
         f.write(readme)
     with open(developer_path, "w", encoding="utf-8") as f:
         f.write(developer)
 
     return state
+
 
 def generate_code_descriptions(codes: List[Code]) -> str:
     descriptions = []

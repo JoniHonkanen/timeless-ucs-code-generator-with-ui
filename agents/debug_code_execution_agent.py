@@ -5,7 +5,7 @@ from prompts.prompts import CODE_FIXER_AGENT_PROMPT
 
 
 async def debug_code_execution_agent(state: GraphState):
-    print("\n **DEBUG CODE**")
+    print("\n **DEBUG CODE EXECUTION AGENT**")
     error = state["error"]
     code_list = state["codes"].codes
     structured_llm = llm.with_structured_output(Code)
@@ -14,10 +14,6 @@ async def debug_code_execution_agent(state: GraphState):
         original_code=code_list, error_message=error
     )
     fixed_code = structured_llm.invoke(prompt)
-
-    print("\nOriginal Codes, one should be replaced:", code_list)
-    print("\nNew Fixed Code:", fixed_code)
-    print("\n\nAbove is the code to be updated.")
 
     for code in code_list:
         if code.filename == fixed_code.filename:

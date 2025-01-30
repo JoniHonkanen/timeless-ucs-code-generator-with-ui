@@ -2,7 +2,10 @@ from .common import llm_code
 from schemas import GraphState, Codes
 from prompts.prompts import CODE_GENERATOR_AGENT_PROMPT
 from langchain_core.messages import AIMessage
-# Generate code from user input
+
+
+# First step in graph flow
+# -> Generate code based on user inputs
 async def code_generator_agent(state: GraphState) -> GraphState:
     print("\n**CODE GENERATOR AGENT**")
     requirement = state["messages"][0].content
@@ -10,7 +13,6 @@ async def code_generator_agent(state: GraphState) -> GraphState:
     structured_llm = llm_code.with_structured_output(Codes)
 
     generated_code = structured_llm.invoke(prompt)
-    print("\nGenerated code:", generated_code)
 
     state["codes"] = generated_code
     state["messages"] += [AIMessage(content=f"{generated_code.description}")]
@@ -23,6 +25,5 @@ async def code_generator_agent(state: GraphState) -> GraphState:
                 f"{code.code}"
             )
         ]
-        print(f"\n[Generated code in {code.programming_language}]\n{code.code}")
 
     return state

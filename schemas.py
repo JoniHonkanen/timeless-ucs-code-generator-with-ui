@@ -1,5 +1,6 @@
 from typing import List, TypedDict, Optional
 from langchain_core.pydantic_v1 import BaseModel, Field, Extra, validator
+from enum import Enum
 
 
 # Schema for single code file
@@ -138,6 +139,13 @@ class DockerFiles(BaseModel):
     dockerfile: str
     docker_compose: str
 
+# Define an Enum for the proceed field
+class ProceedOption(str, Enum):
+    CONTINUE = "continue"
+    CANCEL = "cancel"
+    NEW = "new"
+    DONE = "done"
+    FIX = "fix"
 
 # State of the graph (agents)
 class GraphState(TypedDict):
@@ -149,3 +157,6 @@ class GraphState(TypedDict):
     docker_container_name: str  # Name of the Docker container
     executable_file_name: str  # What is the name of the executable file
     iterations: int  # Number of tries
+    docker_output: str  # What running code in docker container outputs
+    proceed: ProceedOption  # Enum
+    frontend_url: str  # URL for the frontend

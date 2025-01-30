@@ -1,16 +1,30 @@
 import os
 import re
 import subprocess
+import inspect
+import asyncio
 from schemas import GraphState, ErrorMessage
 
-async def execute_docker_agent(state: GraphState, file_path: str):
-    print("\n **EXECUTE DOCKER AGENT **")
-    logs_buffer = []
-    error_output = ""  # Captures the traceback lines
+
+async def start_docker_container_agent(state: GraphState):
+    print("*** START DOCKER CONTAINER AGENT ***")
+    error = None
+    current_function = inspect.currentframe().f_code.co_name
+    current_file = __file__
+
+    container_name = state[
+        "docker_container_name"
+    ]  # Ensure we use the specific container
+    original_dir = os.getcwd()
+    os.chdir("generated/src")
+
+    full_output = ""
+    error_output = ""
+    error_capture = []
+    traceback_started = False
 
     try:
-        os.chdir(file_path)
-        print("Building Docker image...")
+        print(f"Building Docker image for container: {container_name}...")
         build_command = ["docker-compose", "build"]
         build_process = subprocess.Popen(
             build_command,
@@ -19,17 +33,21 @@ async def execute_docker_agent(state: GraphState, file_path: str):
             text=True,
             encoding="utf-8",
         )
-
-        # Capture build logs
         for line in build_process.stdout:
             print(line, end="")
-            logs_buffer.append(line)
+            full_output += line
 
         build_process.wait()
         if build_process.returncode != 0:
-            raise Exception("Docker image build failed")
+            error = ErrorMessage(
+                type="Docker Configuration Error",
+                message="Error during Docker setup or build process.",
+                details=full_output.strip(),
+                code_reference=f"{current_file} - {current_function}",
+            )
+            return {"error": error}
 
-        print("Running Docker container...")
+        print(f"Running Docker container: {container_name}...")
         up_command = [
             "docker-compose",
             "up",
@@ -44,61 +62,65 @@ async def execute_docker_agent(state: GraphState, file_path: str):
             encoding="utf-8",
         )
 
-        traceback_started = False
-        error_capture = []
-
-        # Capture container logs
+        # Process container output with traceback detection
         for line in up_process.stdout:
             print(line, end="")
-            logs_buffer.append(line)
+            full_output += line
 
+            # Detect Python error tracebacks
             if re.match(r'\s*File\s+".+",\s+line\s+\d+', line):
                 traceback_started = True
                 error_capture.append(line)
             elif traceback_started:
                 error_capture.append(line)
-            elif "Traceback" in line or "SyntaxError" in line:
+            elif "Traceback" in line or "SyntaxError" in line or "Exception" in line:
                 traceback_started = True
                 error_capture.append(line)
 
+            # Detect container exit codes
             if "exited with code" in line:
                 error_output = "".join(error_capture)
                 break
 
         up_process.wait()
-        if up_process.returncode != 0:
-            raise Exception("Docker container execution failed")
+        if up_process.returncode != 0 or error_output:
+            print(f"Fetching logs from the container: {container_name}...")
+            log_process = await asyncio.create_subprocess_exec(
+                "docker",
+                "logs",
+                container_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            log_stdout, log_stderr = await log_process.communicate()
+            log_output = log_stdout.decode().strip()
 
-        # No errors encountered
-        state["proceed"] = "continue"
+            error = ErrorMessage(
+                type="Docker Execution Error",
+                message="The code inside the container encountered an error or failed execution.",
+                details=error_output or log_output,
+                code_reference=f"{current_file} - {current_function}",
+            )
+
+            return {"error": error}
+
+        state["docker_output"] = full_output
 
     except Exception as e:
-        # On error, store details in state["error"]
-        error_details = f"An error occurred: {e}"
-        if error_output.strip():
-            error_details += f"\n{error_output.strip()}"
-        print(error_details)
-
-        state["error"] = ErrorMessage(
-            type="Docker Execution Error",
-            details=error_details,
+        error = ErrorMessage(
+            type="Unexpected Docker Error",
+            message="An unexpected error occurred while communicating with Docker.",
+            details=str(e),
+            code_reference=f"{current_file} - {current_function}",
         )
-        state["proceed"] = "fix"
+        return {"error": error}
 
     finally:
-        print("Cleaning up Docker resources...")
-        subprocess.run(["docker-compose", "down"])
-        subprocess.run(["docker", "image", "prune", "-f"])
-        os.chdir("..")
+        # Only remove the container if there was NO error
+        if error is None:
+            subprocess.run(["docker-compose", "down"])
+            subprocess.run(["docker", "image", "prune", "-f"])
 
-        # Append all logs to state["messages"]
-        if "messages" not in state:
-            state["messages"] = []
-        state["messages"].append(
-            {
-                "role": "system",
-                "content": "Docker Logs:\n" + "".join(logs_buffer)
-            }
-        )
+        os.chdir(original_dir)  # Restore original working directory
 
-    return state
+    return {"error": None}

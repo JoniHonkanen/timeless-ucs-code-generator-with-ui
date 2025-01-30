@@ -23,7 +23,6 @@ async def debug_code_agent(state: GraphState):
                 f"{code.code}"
             )
         ]
-        print(f"\n[Fixed code in {code.programming_language}]\n{code.code}")
 
     state["iterations"] += 1
 

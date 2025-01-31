@@ -12,6 +12,7 @@ The main goal of the project is to explore the potential of language models and 
 
 This project was developed in Python and uses the OpenAI API to integrate large language models. We also employed LangChain and LangGraph for managing AI agent workflows, Flask for providing a REST API, and Gradio for allowing users to download the generated code.
 
+### This is part of timeless project:
 <img src="images/timeless_big_picture.png" alt="Timeless project" style="height: 300px; width: auto;">
 
 ## Features
@@ -22,7 +23,7 @@ This project was developed in Python and uses the OpenAI API to integrate large 
 - **Error Handling**: Handles errors in Docker startup and code execution.
 - **REST API Interface**: A Flask-based API allows users to interact with the system via HTTP requests.
 - **Downloadable Code Packages**: Generated code is packaged as a ZIP file and can be downloaded via Gradio.
-
+### Agents and edges:
 <img src="images/graphs/graph_flow.png" alt="Work flow" style="height: 300px; width: auto;">
 
 ## Technologies Used
@@ -34,13 +35,13 @@ This project was developed in Python and uses the OpenAI API to integrate large 
 - **Flask**: Provides a REST API for handling user requests.
 - **Gradio**: Allows users to download the generated code as a ZIP package.
 - **Docker**: Ensures that generated programs run in isolated environments.
-
+### Different states of workflow:
 <img src="images/timeless_code_generator-workflow.png" alt="GPT Lab Seinäjoki Logo" style="height: 350px; width: auto;">
 
 ## Installation
 
-1. **Start virtual environment:**
-   .\.venv\Scripts\activate  # Windows
+1. Start virtual environment:
+   .venv\Scripts\activate  # Windows
 2. install packages -> pip install -r requirements.txt
 3. create .env file with own keys for openai
    1. OPENAI_API_KEY
@@ -55,7 +56,7 @@ This project was developed in Python and uses the OpenAI API to integrate large 
 - Improve code modularization for larger projects.
 - Enhance error checking and handling capabilities.
 - Expand support for additional programming languages and frameworks.
-- Deploy gradio to cloud
+- Deploy UI to cloud
 - Better gradio... 
 
 

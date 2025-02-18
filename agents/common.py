@@ -11,8 +11,11 @@ load_dotenv()
 
 # Shared LLM instance
 api_key = os.getenv("OPENAI_API_KEY")
-llm = ChatOpenAI(api_key=api_key, model="gpt-4o-mini")
-llm_code = ChatOpenAI(api_key=api_key, model="gpt-4o")
+openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+openai_model_code = os.getenv("OPENAI_MODEL_CODE", "gpt-4o")
+
+llm = ChatOpenAI(api_key=api_key, model=openai_model)
+llm_code = ChatOpenAI(api_key=api_key, model=openai_model_code)
 
 # Export common objects or functions
 __all__ = ["PydanticOutputParser", "llm", "llm_code"]

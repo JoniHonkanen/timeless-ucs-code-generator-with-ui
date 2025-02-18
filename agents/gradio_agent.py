@@ -2,8 +2,18 @@ import os
 import shutil
 import subprocess
 from schemas import GraphState, ErrorMessage
+from dotenv import load_dotenv
 
-GRADIO_APP_CODE = """\
+# Load environment variables
+load_dotenv()
+
+# Get the Gradio port (default to 7860 if not set)
+gradio_port = os.getenv("GRADIO_PORT", "7860")
+
+# Dynamically generate the frontend URL
+frontend_url = f"http://localhost:{gradio_port}"
+
+GRADIO_APP_CODE = f"""\
 import gradio as gr
 import tempfile
 import zipfile
@@ -28,7 +38,7 @@ def read_file(filename):
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
-    return f"{filename} not found."
+    return f"{{filename}} not found."
 
 with gr.Blocks(title="Timeless") as demo:
     gr.Markdown("# TIMELESS")
@@ -51,7 +61,7 @@ with gr.Blocks(title="Timeless") as demo:
         with gr.Column(scale=1):
             gr.Textbox(value=read_file("DEVELOPER.md"), lines=20, interactive=False, label="DEVELOPER.md", show_label=True)
 
-demo.launch(server_name="0.0.0.0", server_port=7860)
+demo.launch(server_name="0.0.0.0", server_port={gradio_port})
 """
 
 DOCKERFILE_CONTENT = """\
@@ -62,14 +72,14 @@ RUN pip install gradio
 CMD ["python", "gradio_app.py"]
 """
 
-DOCKER_COMPOSE_CONTENT = """\
+DOCKER_COMPOSE_CONTENT = f"""\
 version: '3'
 services:
   gradio:
     container_name: ui-gradio-1
     build: .
     ports:
-      - "7860:7860"
+      - "{gradio_port}:{gradio_port}"
     volumes:
       - ../../:/app/generated
       - ../../../images/gptlab_sjk_logo.png:/app/images/gptlab_sjk_logo.png
@@ -81,7 +91,7 @@ async def start_gradio_frontend_agent(state: GraphState):
 
     original_dir = os.getcwd()
     ui_dir = os.path.abspath("generated/src/ui")
-    generated_src_path = os.path.abspath("generated/src")
+    #generated_src_path = os.path.abspath("generated/src")
 
     try:
         os.makedirs(ui_dir, exist_ok=True)
@@ -89,13 +99,14 @@ async def start_gradio_frontend_agent(state: GraphState):
 
         # Check if the Gradio container is already running
         result = subprocess.run(
-            ["docker", "ps", "-q", "-f", "name=ui-gradio-1"], capture_output=True, text=True
+            ["docker", "ps", "-q", "-f", "name=ui-gradio-1"],
+            capture_output=True,
+            text=True,
         )
 
         if result.stdout.strip():
             print("Gradio container exists. Restarting...")
             # Ensure the correct path is used
-            generated_src_path = os.path.abspath("generated/src")
             subprocess.run(
                 ["docker", "cp", "../../.", "ui-gradio-1:/app/generated/"],
                 check=True,
@@ -120,11 +131,10 @@ async def start_gradio_frontend_agent(state: GraphState):
             subprocess.run(["docker-compose", "up", "-d"], check=True)
 
         # Delete local files after copying
-        #print("POISTETAAN TIEDOSTOT!")
-        #shutil.rmtree(generated_src_path, ignore_errors=True)
-        #os.makedirs(generated_src_path, exist_ok=True)
+        # print("POISTETAAN TIEDOSTOT!")
+        # shutil.rmtree(generated_src_path, ignore_errors=True)
+        # os.makedirs(generated_src_path, exist_ok=True)
         # Save frontend URL in the state
-        frontend_url = "http://localhost:7860"
         state["frontend_url"] = frontend_url
         print(f"Gradio frontend is available at {frontend_url}")
 

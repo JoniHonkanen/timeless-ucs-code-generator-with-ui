@@ -31,6 +31,9 @@ search_path = os.path.join(os.getcwd(), "generated")
 file_path = os.path.join(search_path, "src")
 test_file = os.path.join(search_path, "test")
 
+# how many times we try to fix the error
+MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", 3))
+
 if not os.path.exists(search_path):
     os.mkdir(search_path)
     os.mkdir(os.path.join(search_path, "src"))
@@ -49,7 +52,7 @@ def decide_to_end(state: GraphState):
     error_message = state["error"]
 
     if error_message:
-        if state["iterations"] >= 3:
+        if state["iterations"] >= MAX_ITERATIONS:
             print("\nToo many iterations! Ending the process.")
             return "end"
 
@@ -127,5 +130,8 @@ async def main():
     return jsonify({"message": "done!", "frontend_url": res.get("frontend_url", None)})
 
 
+# Get Flask configurations from .env
+flask_port = int(os.getenv("FLASK_PORT", 5000))
+
 if __name__ == "__main__":
-    flask_app.run(port=5000, debug=True)
+    flask_app.run(port=flask_port, debug=True, use_reloader=False)

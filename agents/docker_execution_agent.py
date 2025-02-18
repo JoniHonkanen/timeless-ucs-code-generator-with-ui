@@ -12,9 +12,7 @@ async def start_docker_container_agent(state: GraphState):
     current_function = inspect.currentframe().f_code.co_name
     current_file = __file__
 
-    container_name = state[
-        "docker_container_name"
-    ]  # Ensure we use the specific container
+    container_name = state["docker_container_name"]
     original_dir = os.getcwd()
     os.chdir("generated/src")
 
@@ -24,6 +22,7 @@ async def start_docker_container_agent(state: GraphState):
     traceback_started = False
 
     try:
+        # Build image
         print(f"Building Docker image for container: {container_name}...")
         build_command = ["docker-compose", "build"]
         build_process = subprocess.Popen(
@@ -33,6 +32,7 @@ async def start_docker_container_agent(state: GraphState):
             text=True,
             encoding="utf-8",
         )
+        # get logs from the build process
         for line in build_process.stdout:
             print(line, end="")
             full_output += line
@@ -47,12 +47,13 @@ async def start_docker_container_agent(state: GraphState):
             )
             return {"error": error}
 
+        # Run container
         print(f"Running Docker container: {container_name}...")
         up_command = [
             "docker-compose",
             "up",
             "--abort-on-container-exit",
-            "--no-log-prefix",
+            "--no-log-prefix",  # Cleaner log output
         ]
         up_process = subprocess.Popen(
             up_command,
@@ -62,12 +63,12 @@ async def start_docker_container_agent(state: GraphState):
             encoding="utf-8",
         )
 
-        # Process container output with traceback detection
+        # get logs from the process
         for line in up_process.stdout:
             print(line, end="")
             full_output += line
 
-            # Detect Python error tracebacks
+            # Capture error output
             if re.match(r'\s*File\s+".+",\s+line\s+\d+', line):
                 traceback_started = True
                 error_capture.append(line)
@@ -77,12 +78,21 @@ async def start_docker_container_agent(state: GraphState):
                 traceback_started = True
                 error_capture.append(line)
 
-            # Detect container exit codes
+            # Check if the container exited with an error
             if "exited with code" in line:
                 error_output = "".join(error_capture)
                 break
 
-        up_process.wait()
+        # Ensure long-running services don't block execution (live server etc.)
+        # so we can proceed the agent workflow
+        try:
+            up_process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            print(
+                f"Container {container_name} is still running after 3 seconds, proceeding to cleanup..."
+            )
+
+        # Handle errors if container exits with failure
         if up_process.returncode != 0 or error_output:
             print(f"Fetching logs from the container: {container_name}...")
             log_process = await asyncio.create_subprocess_exec(
@@ -107,6 +117,7 @@ async def start_docker_container_agent(state: GraphState):
         state["docker_output"] = full_output
 
     except Exception as e:
+        # Catch any unexpected errors
         error = ErrorMessage(
             type="Unexpected Docker Error",
             message="An unexpected error occurred while communicating with Docker.",
@@ -116,11 +127,11 @@ async def start_docker_container_agent(state: GraphState):
         return {"error": error}
 
     finally:
-        # Only remove the container if there was NO error
+        # Clean up, so stop containers etc.
         if error is None:
             subprocess.run(["docker-compose", "down"])
             subprocess.run(["docker", "image", "prune", "-f"])
 
-        os.chdir(original_dir)  # Restore original working directory
+        os.chdir(original_dir) # Restore working directory
 
     return {"error": None}

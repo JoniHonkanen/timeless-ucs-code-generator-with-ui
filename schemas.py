@@ -118,26 +118,31 @@ class DockerFile(BaseModel):
 
 
 class ErrorMessage(BaseModel):
-    """
-    Represents a structured error message.
-
-    Attributes:
-        type: The type of error (e.g., 'Internal Code Error', 'Dependency Error', 'Execution Error').
-        details:  detailed information or stack trace related to the error.
-        code_reference:  reference to the part of the code where the error occurred (e.g., filename, function name, line number).
-    """
-
-    type: str
-    details: str
-    file: Optional[str] = None
-    line: Optional[int] = None
-    code_reference: Optional[str] = None
+    type: str = Field(
+        description="The type of error (e.g., 'Internal Code Error', 'Dependency Error', 'Execution Error')."
+    )
+    details: str = Field(
+        description="Detailed information or a stack trace related to the error."
+    )
+    file: Optional[str] = Field(
+        default=None,
+        description="An optional reference to the file where the error occurred.",
+    )
+    line: Optional[int] = Field(
+        default=None,
+        description="An optional line number indicating where the error occurred.",
+    )
+    code_reference: Optional[str] = Field(
+        default=None,
+        description="An optional reference to the part of the code (e.g., function name, line number) where the error occurred.",
+    )
 
 
 # include texts from Dockerfile and compose.yaml
 class DockerFiles(BaseModel):
     dockerfile: str
     docker_compose: str
+
 
 # Define an Enum for the proceed field
 class ProceedOption(str, Enum):
@@ -146,6 +151,7 @@ class ProceedOption(str, Enum):
     NEW = "new"
     DONE = "done"
     FIX = "fix"
+
 
 # State of the graph (agents)
 class GraphState(TypedDict):

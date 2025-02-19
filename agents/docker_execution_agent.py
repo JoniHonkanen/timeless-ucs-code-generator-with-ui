@@ -3,6 +3,7 @@ import re
 import subprocess
 import inspect
 import asyncio
+import time
 from schemas import GraphState, ErrorMessage
 
 
@@ -32,7 +33,7 @@ async def start_docker_container_agent(state: GraphState):
             text=True,
             encoding="utf-8",
         )
-        # get logs from the build process
+        # Read logs from the build process
         for line in build_process.stdout:
             print(line, end="")
             full_output += line
@@ -63,12 +64,16 @@ async def start_docker_container_agent(state: GraphState):
             encoding="utf-8",
         )
 
-        # get logs from the process
-        for line in up_process.stdout:
+        # Read logs with a timer; break out after 3 seconds
+        start_time = time.time()
+        while True:
+            line = up_process.stdout.readline()
+            if not line:
+                break
             print(line, end="")
             full_output += line
 
-            # Capture error output
+            # Capture error output based on traceback patterns
             if re.match(r'\s*File\s+".+",\s+line\s+\d+', line):
                 traceback_started = True
                 error_capture.append(line)
@@ -78,22 +83,28 @@ async def start_docker_container_agent(state: GraphState):
                 traceback_started = True
                 error_capture.append(line)
 
-            # Check if the container exited with an error
+            # Check if the container exited with an error message
             if "exited with code" in line:
                 error_output = "".join(error_capture)
                 break
 
-        # Ensure long-running services don't block execution (live server etc.)
-        # so we can proceed the agent workflow
-        try:
-            up_process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            print(
-                f"Container {container_name} is still running after 3 seconds, proceeding to cleanup..."
-            )
+            # Check if 3 seconds have elapsed; if so, break out of the loop
+            if time.time() - start_time > 3:
+                print("3 seconds passed, stopping log capture...")
+                break
 
-        # Handle errors if container exits with failure
-        if up_process.returncode != 0 or error_output:
+        # Kill the container process if it's still running
+        # Reads the container logs, and if the container does not stop on its own (e.g., a live service), log reading is interrupted after 3 seconds.
+        try:
+            up_process.kill()
+        except Exception:
+            pass
+
+        # If errors were captured or the container exited with a failure code,
+        # fetch more detailed logs from the container.
+        if (
+            up_process.returncode is not None and up_process.returncode != 0
+        ) or error_output:
             print(f"Fetching logs from the container: {container_name}...")
             log_process = await asyncio.create_subprocess_exec(
                 "docker",
@@ -103,7 +114,11 @@ async def start_docker_container_agent(state: GraphState):
                 stderr=asyncio.subprocess.PIPE,
             )
             log_stdout, log_stderr = await log_process.communicate()
-            log_output = log_stdout.decode().strip()
+            log_output = (
+                log_stdout.decode().strip()
+                if isinstance(log_stdout, bytes)
+                else log_stdout
+            )
 
             error = ErrorMessage(
                 type="Docker Execution Error",
@@ -111,7 +126,6 @@ async def start_docker_container_agent(state: GraphState):
                 details=error_output or log_output,
                 code_reference=f"{current_file} - {current_function}",
             )
-
             return {"error": error}
 
         state["docker_output"] = full_output
@@ -127,11 +141,10 @@ async def start_docker_container_agent(state: GraphState):
         return {"error": error}
 
     finally:
-        # Clean up, so stop containers etc.
+        # Clean up: bring down containers and prune images if no error occurred
         if error is None:
             subprocess.run(["docker-compose", "down"])
             subprocess.run(["docker", "image", "prune", "-f"])
-
-        os.chdir(original_dir) # Restore working directory
+        os.chdir(original_dir)  # Restore working directory
 
     return {"error": None}

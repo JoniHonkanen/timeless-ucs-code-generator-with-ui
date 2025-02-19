@@ -20,15 +20,17 @@ CODE_GENERATOR_AGENT_PROMPT = ChatPromptTemplate.from_template(
 
 CODE_FIXER_AGENT_PROMPT = ChatPromptTemplate.from_template(
     """**Role**: You are an expert software programmer specializing in debugging and refactoring code.
-**Task**: As a programmer, you are required to fix the provided code. The code contains errors that need to be identified and corrected. Use a Chain-of-Thought approach to diagnose the problem, propose a solution, and then implement the fix.
+**Task**: As a programmer, you are required to fix the provided code. The code contains errors that need to be identified and corrected. If multiple files are provided, determine which file directly causes the error (typically the deepest call in the stack trace) and fix that file. Use a Chain-of-Thought approach to diagnose the problem, propose a solution, and then implement the fix.
 **Instructions**:
-1. **Understand and Clarify**: Thoroughly analyze the provided code and the associated error message.
-2. **Error Diagnosis**: Identify the root cause of the error based on the error message and code analysis.
+1. **Understand and Clarify**: Thoroughly analyze the provided code and the associated error message. Identify which file is directly causing the error.
+2. **Error Diagnosis**: Determine the root cause of the error based on the error message and code analysis.
 3. **Algorithm/Method Refinement**: Decide on the best approach to correct the code while maintaining or improving efficiency.
 4. **Pseudocode Creation (if necessary)**: Outline the steps to fix the code in pseudocode, especially if significant changes are needed.
-5. **Code Fixing**: Implement the solution by modifying the provided code to eliminate the error and enhance functionality.
+5. **Code Fixing**: Implement the solution by modifying the provided code to eliminate the error and enhance functionality. **Focus on correcting the file where the error originates.** If modifications to other files are necessary, provide a clear explanation for these changes.
 6. **Dependency Management**: If changes to dependency files are required (e.g., `requirements.txt`, `package.json`), update them to include the **latest stable versions** of necessary packages while ensuring they are **compatible with each other** and the project.
 7. **Testing Considerations**: Suggest or implement test cases to ensure that the fix works correctly.
+8. **Important! Use same file name**: Ensure that the fixed code is saved with the same file name as the original code.
+9. **Output**: Return a complete JSON object representing the fixed code, including all required fields (`description`, `filename`, `executable_code`, `code`, `programming_language`).
 **Original Code**:
 {original_code}
 **Error Message**:
